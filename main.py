@@ -9,7 +9,7 @@ PoseLandmarker = mp.tasks.vision.PoseLandmarker
 PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
 RunningMode = mp.tasks.vision.RunningMode
 
-
+#test
 # Configure the pose detector:
 options = PoseLandmarkerOptions(
     base_options = BaseOptions(
