@@ -23,7 +23,7 @@ options = PoseLandmarkerOptions(
 camera = cv2.VideoCapture(0)
 
 #numeric values of body landmarks on the face
-face_landmarks = [0,1,2,3,4,5,6,7,8,9,10]
+face_landmarks = {0,1,2,3,4,5,6,7,8,9,10}
 
 
 # Create the pose detector using the configuration above
