@@ -2,6 +2,10 @@ import cv2
 import mediapipe as mp
 import time
 
+from joint_calculations import toVector
+from joint_calculations import jointAngle2D
+
+
 #Load Mediapipe Landmarks
 
 BaseOptions = mp.tasks.BaseOptions
@@ -9,7 +13,7 @@ PoseLandmarker = mp.tasks.vision.PoseLandmarker
 PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
 RunningMode = mp.tasks.vision.RunningMode
 
-#test
+
 # Configure the pose detector:
 options = PoseLandmarkerOptions(
     base_options = BaseOptions(
@@ -23,7 +27,7 @@ options = PoseLandmarkerOptions(
 camera = cv2.VideoCapture(0)
 
 #numeric values of body landmarks on the face
-face_landmarks = {0,1,2,3,4,5,6,7,8,9,10}
+face_landmarks = [0,1,2,3,4,5,6,7,8,9,10]
 
 
 # Create the pose detector using the configuration above
@@ -67,6 +71,20 @@ with PoseLandmarker.create_from_options(options) as landmarker:
 
             # Retrieve the body landmarks of the first detected person
             pose_landmarks = result.pose_landmarks[0]
+
+            #Retrieving and sending information about certain landmarks to toVector in joint_calculations
+
+            right_shoulder = pose_landmarks[11]
+            right_elbow = pose_landmarks[13]
+            right_wrist = pose_landmarks[15]
+
+            vector1 = toVector(right_shoulder, right_elbow)
+            vector2 = toVector(right_wrist, right_elbow)
+
+            #Calculating angle between leftshoulder and leftelbow
+
+            print(vector1, vector2)
+            print("2D:", jointAngle2D(vector1, vector2))
 
             # Retrieve the connections that define the human body skeleton
             connections = mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
