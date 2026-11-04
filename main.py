@@ -2,8 +2,7 @@ import cv2
 import mediapipe as mp
 import time
 
-from joint_calculations import toVector
-from joint_calculations import jointAngle2D
+from joint_calculations import jointAngle
 
 
 #Load Mediapipe Landmarks
@@ -28,6 +27,21 @@ camera = cv2.VideoCapture(0)
 
 #numeric values of body landmarks on the face
 face_landmarks = [0,1,2,3,4,5,6,7,8,9,10]
+
+# joint name: (point A, joint B, point C) -> angle measured at B
+# The frame is mirrored before detection, so MediaPipe's "left" indices (odd) are the user's right side
+JOINTS = {
+    "right elbow":    (11, 13, 15),
+    "left elbow":     (12, 14, 16),
+    "right shoulder": (13, 11, 23),
+    "left shoulder":  (14, 12, 24),
+    "right hip":      (11, 23, 25),
+    "left hip":       (12, 24, 26),
+    "right knee":     (23, 25, 27),
+    "left knee":      (24, 26, 28),
+    "right ankle":    (25, 27, 31),
+    "left ankle":     (26, 28, 32),
+}
 
 
 # Create the pose detector using the configuration above
@@ -72,19 +86,14 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             # Retrieve the body landmarks of the first detected person
             pose_landmarks = result.pose_landmarks[0]
 
-            #Retrieving and sending information about certain landmarks to toVector in joint_calculations
+            # World landmarks are real 3D coordinates in meters, so angles don't depend on camera aspect ratio or facing direction
+            world_landmarks = result.pose_world_landmarks[0]
 
-            right_shoulder = pose_landmarks[11]
-            right_elbow = pose_landmarks[13]
-            right_wrist = pose_landmarks[15]
-
-            vector1 = toVector(right_shoulder, right_elbow)
-            vector2 = toVector(right_wrist, right_elbow)
-
-            #Calculating angle between leftshoulder and leftelbow
-
-            print(vector1, vector2)
-            print("2D:", jointAngle2D(vector1, vector2))
+            # Angle (degrees) of every joint in JOINTS, e.g. angles["right knee"]
+            angles = {
+                name: jointAngle(world_landmarks[a], world_landmarks[b], world_landmarks[c])
+                for name, (a, b, c) in JOINTS.items()
+            }
 
             # Retrieve the connections that define the human body skeleton
             connections = mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
@@ -129,6 +138,15 @@ with PoseLandmarker.create_from_options(options) as landmarker:
 
                     # Draw a red circle at the landmark's position
                     cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
+
+            # Write each joint's angle next to the joint (skip joints MediaPipe can't see well)
+            for name, (a, b, c) in JOINTS.items():
+                joint = pose_landmarks[b]
+                if joint.visibility < 0.5:
+                    continue
+                x, y = int(joint.x * w), int(joint.y * h)
+                cv2.putText(frame, f"{angles[name]:.0f}", (x + 10, y),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
         #Displays the camera frame with the drawn skeleton
         cv2.imshow("Exercise Tracker - Pose Tracking", frame)
