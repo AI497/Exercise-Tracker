@@ -1,35 +1,27 @@
+"""
+Exercise Tracker: live pose tracking from the webcam.
+
+Draws the body skeleton on the camera feed and writes the angle (in degrees)
+of each major joint next to it. Press the SPACEBAR to quit.
+"""
+
+import time
+
 import cv2
 import mediapipe as mp
-import time
 
 from joint_calculations import jointAngle
 
 
-#Load Mediapipe Landmarks
+# MediaPipe model file (must sit in the folder you run the program from)
+MODEL_PATH = "pose_landmarker_lite.task"
 
-BaseOptions = mp.tasks.BaseOptions
-PoseLandmarker = mp.tasks.vision.PoseLandmarker
-PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
-RunningMode = mp.tasks.vision.RunningMode
+# Landmarks 0-10 are on the face; we don't draw them
+FACE_LANDMARKS = set(range(11))
 
-
-# Configure the pose detector:
-options = PoseLandmarkerOptions(
-    base_options = BaseOptions(
-        model_asset_path = "pose_landmarker_lite.task"
-    ),
-    running_mode = RunningMode.VIDEO,
-    num_poses = 1
-)
-
-#Initalize the computer's camera
-camera = cv2.VideoCapture(0)
-
-#numeric values of body landmarks on the face
-face_landmarks = [0,1,2,3,4,5,6,7,8,9,10]
-
-# joint name: (point A, joint B, point C) -> angle measured at B
-# The frame is mirrored before detection, so MediaPipe's "left" indices (odd) are the user's right side
+# Joints to measure: name -> (point A, joint B, point C); the angle is measured at B.
+# Numbers are MediaPipe pose landmark indices (see README).
+# The frame is mirrored before detection, so MediaPipe's "left" (odd) indices are the user's right side.
 JOINTS = {
     "right elbow":    (11, 13, 15),
     "left elbow":     (12, 14, 16),
@@ -43,119 +35,91 @@ JOINTS = {
     "left ankle":     (26, 28, 32),
 }
 
+# Joints MediaPipe is less sure about than this aren't labelled (their angle would be noise)
+MIN_VISIBILITY = 0.5
 
-# Create the pose detector using the configuration above
-with PoseLandmarker.create_from_options(options) as landmarker:
+# Pairs of landmarks that form the skeleton lines
+SKELETON = mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
 
+
+# Set up the pose detector for a video stream, tracking one person
+options = mp.tasks.vision.PoseLandmarkerOptions(
+    base_options=mp.tasks.BaseOptions(model_asset_path=MODEL_PATH),
+    running_mode=mp.tasks.vision.RunningMode.VIDEO,
+    num_poses=1,
+)
+
+camera = cv2.VideoCapture(0)
+
+with mp.tasks.vision.PoseLandmarker.create_from_options(options) as landmarker:
 
     start_time = time.monotonic()
 
-    # Continuously capture and process camera frames
     while camera.isOpened():
 
-        # Reads the next camera frame and stores whether it was successful and the image itself
         success, frame = camera.read()
-
-        # Stop the program if the camera fails to provide a frame
         if not success:
             print("Could not access camera")
             break
 
-        #Flips the camera to create a mirror view
-        frame = cv2.flip(frame,1)
+        # Mirror the image so it behaves like a mirror for the user
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
 
-        # Convert the frame from OpenCV's BGR format to RGB so the MediaPipe can be able to understand it
+        # MediaPipe expects RGB; OpenCV gives BGR
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        #Converts the RGB frame into a MediaPipe compatible image object
-        mp_image = mp.Image(
-            image_format=mp.ImageFormat.SRGB,
-            data=rgb_frame
-        )
-
-        # Generate a timestamp for the current frame
+        # Video mode needs an increasing timestamp for each frame
         timestamp_ms = int((time.monotonic() - start_time) * 1000)
-
-        # Pass the current image and its timestamp to MediaPipe for pose detection
         result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-
-        # Check whether MediaPipe successfully detected any people
         if result.pose_landmarks:
 
-            # Retrieve the body landmarks of the first detected person
+            # Screen landmarks: x, y are 0-1 fractions of the image width/height (used for drawing)
             pose_landmarks = result.pose_landmarks[0]
 
-            # World landmarks are real 3D coordinates in meters, so angles don't depend on camera aspect ratio or facing direction
+            # World landmarks: real 3D positions in meters (used for angles, so they
+            # don't depend on the image's aspect ratio or which way the person faces)
             world_landmarks = result.pose_world_landmarks[0]
 
-            # Angle (degrees) of every joint in JOINTS, e.g. angles["right knee"]
+            # Angle of every joint in JOINTS, e.g. angles["right knee"]
             angles = {
                 name: jointAngle(world_landmarks[a], world_landmarks[b], world_landmarks[c])
                 for name, (a, b, c) in JOINTS.items()
             }
 
-            # Retrieve the connections that define the human body skeleton
-            connections = mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS
-
-            # Loop through all the connections that make up the human body skeleton
-
-            for connection in connections:
-
-                # Retrieve the two landmarks that form the current connection
+            # Green skeleton lines
+            for connection in SKELETON:
+                if connection.start in FACE_LANDMARKS or connection.end in FACE_LANDMARKS:
+                    continue
                 start = pose_landmarks[connection.start]
                 end = pose_landmarks[connection.end]
+                cv2.line(frame,
+                         (int(start.x * w), int(start.y * h)),
+                         (int(end.x * w), int(end.y * h)),
+                         (0, 255, 0), 2)
 
-                if ((connection.start in face_landmarks) or (connection.end in face_landmarks)):
-                    continue
-
-                else:
-
-                    h,w, _ = frame.shape
-
-                    # Convert normalized landmark coordinates into pixel coordinates
-                    x1, y1 = int(start.x * w), int(start.y * h)
-                    x2, y2 = int(end.x * w), int(end.y * h)
-
-                    # Draw a green line between the two landmarks
-                    cv2.line(
-                        frame, (x1,y1), (x2, y2),
-                        (0,255,0), 2
-                    )
-
-            #Loop through all detected body landmarks
+            # Red dot on each body landmark
             for i, landmark in enumerate(pose_landmarks):
-
-                if (i in face_landmarks):
+                if i in FACE_LANDMARKS:
                     continue
+                cv2.circle(frame, (int(landmark.x * w), int(landmark.y * h)), 5, (0, 0, 255), -1)
 
-                else:
-
-                    h,w, _ = frame.shape
-
-                    x = int(landmark.x * w)
-                    y = int(landmark.y * h)
-
-                    # Draw a red circle at the landmark's position
-                    cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
-
-            # Write each joint's angle next to the joint (skip joints MediaPipe can't see well)
+            # White angle label next to each joint
             for name, (a, b, c) in JOINTS.items():
                 joint = pose_landmarks[b]
-                if joint.visibility < 0.5:
+                if joint.visibility < MIN_VISIBILITY:
                     continue
-                x, y = int(joint.x * w), int(joint.y * h)
-                cv2.putText(frame, f"{angles[name]:.0f}", (x + 10, y),
+                cv2.putText(frame, f"{angles[name]:.0f}",
+                            (int(joint.x * w) + 10, int(joint.y * h)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        #Displays the camera frame with the drawn skeleton
         cv2.imshow("Exercise Tracker - Pose Tracking", frame)
 
-        # Press Q to exit from the program
+        # Press SPACEBAR to quit
         if cv2.waitKey(1) & 0xFF == ord(' '):
             break
 
-#closes window
 camera.release()
 cv2.destroyAllWindows()
-
