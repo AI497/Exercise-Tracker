@@ -57,27 +57,3 @@ def jointAngle2D(vector_a, vector_b):
     thetaDeg = math.degrees(thetaRad)
 
     return thetaDeg
-
-def jointAngle(point_a, point_b, point_c):
-    """Angle in degrees at point_b, between segments b->a and b->c (3D)."""
-
-    vector_a = toVector(point_a, point_b)
-    vector_c = toVector(point_c, point_b)
-
-    mags = magnitude(vector_a) * magnitude(vector_c)
-    if mags == 0:
-        return 0.0
-
-    val = max(-1, min(1, dotProduct(vector_a, vector_c) / mags))
-
-    return math.degrees(math.acos(val))
-
-
-if __name__ == "__main__":
-    b = Vector(0, 0, 0)
-    assert round(jointAngle(Vector(1, 0, 0), b, Vector(0, 1, 0))) == 90
-    assert round(jointAngle(Vector(1, 0, 0), b, Vector(-1, 0, 0))) == 180
-    assert round(jointAngle(Vector(1, 0, 0), b, Vector(1, 0, 0))) == 0
-    assert round(jointAngle(Vector(1, 0, 0), b, Vector(1, 0, 1))) == 45
-    assert jointAngle(b, b, Vector(1, 0, 0)) == 0.0
-    print("ok")
