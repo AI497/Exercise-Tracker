@@ -4,6 +4,8 @@ import time
 
 from joint_calculations import toVector
 from joint_calculations import jointAngle2D
+from exercise_detection import CurlTracker
+from exercise_detection import RepCounter
 
 
 #Load Mediapipe Landmarks
@@ -29,6 +31,13 @@ camera = cv2.VideoCapture(0)
 #numeric values of body landmarks on the face
 face_landmarks = [0,1,2,3,4,5,6,7,8,9,10]
 
+
+# Calls classes that will be used to keep track of elbows and also count reps seperately for each of them
+trackerRE = CurlTracker()
+repCounterRE = RepCounter()
+
+trackerLE = CurlTracker()
+repCounterLE = RepCounter()
 
 # Create the pose detector using the configuration above
 with PoseLandmarker.create_from_options(options) as landmarker:
@@ -78,22 +87,88 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             right_elbow = pose_landmarks[13]
             right_wrist = pose_landmarks[15]
 
-            vector1 = toVector(right_shoulder, right_elbow)
-            vector2 = toVector(right_wrist, right_elbow)
+
+            left_shoulder = pose_landmarks[12]
+            left_elbow = pose_landmarks[14]
+            left_wrist = pose_landmarks[16]
+
+            #Calculating the vectors of the right shoulder to elbow and right wrist to right elbow
+            vectorRS_RE = toVector(right_shoulder, right_elbow)
+            vectorRW_RE = toVector(right_wrist, right_elbow)
+
+            #Calculating the vectors of the left shoulder to elbow and left wrist to left elbow
+            vectorLS_LE = toVector(left_shoulder, left_elbow)
+            vectorLW_LE = toVector(left_wrist, left_elbow)
+
 
             #Calculating angle between leftshoulder and leftelbow
 
-            angle = jointAngle2D(vector1, vector2)
+            angleRE = jointAngle2D(vectorRS_RE, vectorRW_RE)
+            angleLE = jointAngle2D(vectorLS_LE, vectorLW_LE)
+
+            #Displaying both angles on the frame created
 
             cv2.putText(
                 frame, 
-                f"Elbow Angle: {angle:.2f}",
+                f"Right Elbow Angle: {angleRE:.0f}",
                 (20,40),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
                 (0,0,0),
                 2
 
+            )
+
+            cv2.putText(
+                frame, 
+                f"Left Elbow Angle: {angleLE:.0f}",
+                (20,20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0,0,0),
+                2
+
+            )
+
+            #Using tracker class from before to calculate the movement type of the right and left elbow
+            movementRE = trackerRE.update(angleRE, timestamp_ms / 1000)
+            movementLE = trackerLE.update(angleLE, timestamp_ms/1000)
+
+
+            #Displys the movements of both elbows on the frame
+            cv2.putText(
+                frame,
+                f"Movement: {movementRE}",
+                (20, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 0),
+                2
+            )
+
+            cv2.putText(
+                frame,
+                f"Movement: {movementLE}",
+                (40, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 0),
+                2
+            )
+
+            #Uses the repCounter class to calculate when the reps are done, only going up if done correctly
+            repsRE = repCounterRE.countRep(movementRE, angleRE)
+            repsLE = repCounterLE.countRep(movementLE, angleLE)
+
+            #Displays reps for each arm seperately on the frame
+            cv2.putText(
+                frame,
+                f"Right Arm Reps: {repsRE}", (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+            )
+
+            cv2.putText(
+                frame,
+                f"Left Arm Reps: {repsLE}", (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
             )
 
             # Retrieve the connections that define the human body skeleton

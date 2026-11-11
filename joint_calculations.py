@@ -1,5 +1,6 @@
 import math
 
+#Creates a vector class with an x,y,z component for easy use with future vector calculations
 class Vector:
 
     def __init__ (self, x, y, z):
@@ -12,7 +13,7 @@ class Vector:
     def __repr__(self):
         return f"x={self.x}, y={self.y}, z={self.z}"
 
-
+#Function that will take two landmark points and creates a vector of them
 def toVector (point_a, point_b):
 
     x1 = point_a.x - point_b.x
@@ -21,6 +22,7 @@ def toVector (point_a, point_b):
 
     return Vector(x1, y1, z1)
 
+#Function to determine the magnitude of of a vector
 def magnitude (vector_a):
 
     x = pow(vector_a.x, 2)
@@ -31,6 +33,7 @@ def magnitude (vector_a):
 
     return mag
 
+#Function that will calculate the dot product of two vectors
 def dotProduct (vector_a, vector_b):
 
     newx = vector_a.x * vector_b.x
@@ -40,7 +43,7 @@ def dotProduct (vector_a, vector_b):
 
     return dot
 
-
+#Calculates the 2D angle of two vectors
 def jointAngle2D(vector_a, vector_b):
 
     dot = (vector_a.x * vector_b.x) + (vector_a.y * vector_b.y)
